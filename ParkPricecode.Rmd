@@ -1,0 +1,215 @@
+---
+title: "ParkPrice"
+author: "Trevor"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+
+prettyplot<-function(p1, xlab, ylab) {p2<-p1+theme(axis.title = element_text(size = 16)) + ylab(ylab)+ xlab(xlab)
+p3<-p2+theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_rect(fill="white"), axis.line = element_line(colour = "black", linewidth=1), legend.position="none", axis.text=element_text(size=10))}
+#prelim to make a nicer plot
+
+
+#Figure 1 right Drent and Daan model the linear function is F=n+cy. gaussian function is  normal. max is given from differentiation *Fig 5 in text)
+
+
+computeMax<-function(n,c, omega) (sqrt(4*c*c*omega*omega+n*n)-n)/(2*c) #max fitness of an individual in initial state, n. 
+
+fitness_for_any_y <- function(y, af, n, c, omegasq) {
+  (1 / sqrt(2 * pi * omegasq)) * exp(-y^2 / (2 * omegasq)) * (af * n + c * y)}
+
+
+library(ggforce)
+library(ggplot2)
+library(reshape2)
+avec<-seq(-0.05, 0.2, 0.005)
+maxy<-as.data.frame(matrix(ncol=1, nrow=length(avec)))
+
+#for (i in 1:10) maxy[,i+1]<-computeMax(avec, 0.07, (1+i)/10)
+
+maxy<-computeMax(avec, 0.07, 1)
+
+opt<-data.frame(avec, maxy)
+optmelt<-reshape2::melt(opt[,c(1,2)], id.var='avec')
+p1<-ggplot(optmelt, aes(x=avec, y=value, group=variable, color = avec)) + ggforce::geom_link2(lwd=2) + 
+    scale_color_gradient(low = "blue", high = "red")+ylim(c(0,1.5))
+p3<-prettyplot(p1, "Nutritional state", "Displacement")
+
+
+#fig 1 left
+omegasq<-1
+af=1
+n<-c(-0.02, 0.09)
+c<-0.07
+y<-seq(-2,3,0.01)
+y1<-n[1]+c*y
+y2<-n[2]+c*y
+envcurve<-(1 / sqrt(2 * pi * omegasq)) * exp(-y^2 / (2 * omegasq))
+plot(envcurve~y, type="l", col="purple",  las=1, bty="l", ylab="Relative fitness", xlab="Breeding date")
+
+F_nlow<-fitness_for_any_y(y, af, n[1], c, omegasq)
+lines(F_nlow*8~y, xlim=c(-c/n[1], 3), col="blue")
+F_nhigh<-fitness_for_any_y(y, af, n[2], c, omegasq)
+lines(F_nhigh*8~y, xlim=c(-c/n[2], 3), col="red")
+lines(y1~y, col="#0000FF66", lty=2)
+lines(y2~y, col="#FF000088", lty=2)
+
+
+#fitness
+library(rgl)
+n <- seq(0, 4, 0.1)
+y <- seq(0, 2, 0.1)
+f <- function(n,y) exp(-y^2)*(n+y)
+z <- outer(n, y, f)*10
+
+contour(n,y, z, nlevels = 10, xlab = "nutrition", ylab = "breeding date")
+
+open3d()
+persp3d(n, y, z,
+      theta = 40, phi = 30,
+      xlab = "nutritional state", ylab = "breeding date", zlab = "fitness",
+      col = "lightblue", shade = 0.5, border = NA, box=F)
+
+
+plot(exp(-y^2)*(2+y)~ y, type="l", las=1, bty="l", col="red", ylab="Fitness", xlab="Breeding date", yaxt="n", xaxt="n")
+at <- pretty(range(y))                 # tick positions
+lab <- sprintf("%.0f", at)            # format with 2 decimals
+axis(1, at = at, labels = lab) 
+at2 <- pretty(range(n))
+lab <- sprintf("%.0f", at2)    
+axis(2, at2, labels = lab) 
+lines(exp(-y^2)*(1+y)~ y, col="purple")
+lines(exp(-y^2)*(y)~ y,col="blue")
+
+
+                                                                                          
+```
+
+```{r Jose mean}
+library(GPBayes)
+
+xh<-function(sigma_y,omega,sigma_n, c, a) {
+  xi<-(sqrt(2)*c*omega^2*(sigma_y^2 + omega^2)) / ( abs(a)*sigma_n )
+  y<-HypergU(-0.5, 0, xi^2)/xi
+  g<-data.frame(xi,y)
+  return(g)}
+  
+
+sigma_y=1
+omega=2
+c=1
+a=1
+sigma_n<-seq(0,1,0.01)
+
+
+z<-sapply(sigma_n, xh, sigma_y=sigma_y, omega=omega, c=c, a=a)
+colnames(z)<-paste("sigman=",as.character(sigma_n), sep="")
+z
+
+#xh(sigma_y,omega,sigma_n, c, a)
+```
+
+
+
+```{r max in wbar according to perplexity equation}
+
+#note 
+
+y_opt <- function(omegasq, af, n, c) (-af * n + sqrt((af * n)^2 + 4 * c^2 * omegasq)) / (2 * c)
+
+fitness_for_any_y <- function(y, af, n, c, omegasq) {
+  (1 / sqrt(2 * pi * omegasq)) * exp(-y^2 / (2 * omegasq)) * (af * n + c * y)}
+
+#add error to an individual n and compute the fitness.
+errorf<-function(n, omegasq, af,  c) {
+accumulator<-list()
+for (j in 1:length(n)){
+y_error<-rnorm(100, y_opt(n=n[j], omegasq=omegasq, af=af, c=c), sqrt(vge))
+fitnesses<-fitness_for_any_y(y_error, af, n=n[j], c, omegasq)
+accumulator[[j]]<-data.frame(y_error,fitnesses)}
+res <- do.call(rbind, accumulator)
+res <- as.data.frame(res)
+seldiff<-cov(res$y_error,res$fitnesses)/mean(res$fitnesses)
+stddseldiff<-seldiff/sqrt(var(res$y_error))
+yvar<-var(res$y_error)
+ybar<-mean(res$y_error) 
+heritability<-vg/(vge+yvar)
+data.frame(ybar, yvar, seldiff, stddseldiff, heritability)}
+
+stats<- function(n, omegasq, af, c) { 
+y_max <- y_opt(n, omegasq=omegasq, af=af, c=c)
+fit_max<-fitness_for_any_y(y_max, af, n, c, omegasq)
+seldiff<-cov(y_max,fit_max)/mean(fit_max)
+stddseldiff<-seldiff/sqrt(var(y_max))
+yvar<-var(y_max)
+ybar<-mean(y_max) 
+heritability<-vg/(vge+yvar)
+data.frame(ybar, yvar, seldiff, stddseldiff, heritability)}
+
+#sigmasqy=1 kestrel
+#omegasq=27*27 kestrel
+#c=0.094 kestrel
+af=1
+#sigma_n=0.44 kestrel
+#nbar=2.6 kestrel
+sigma_n=0.5
+omegasq=20
+c=1
+vg=0.5
+ve=0.5
+vge=vg+ve
+
+nbar<-seq(2,3,1)
+ sigma_n<-c(0.5,1) 
+results<-list()
+
+for(k in 1: length(nbar)) {
+n<-rnorm(1000, nbar[k], sd = sigma_n[1])
+#run with no error in switch point.
+noerror<-stats(n, omegasq=omegasq, af=af, c=c)
+
+#adding error to y
+error<-errorf(n, omegasq=omegasq, af=af, c=c)
+
+results[[k]]<-rbind(noerror, error)
+
+results[[k]]<-cbind(results[[k]], sigma_n[1], nbar, omegasq, c, c("noerror", paste("error=",vge, sep="")))
+names(results[[k]])[c(6:10)]<-c("sigma_n", "Mean_n", "omegasq","c", "errorORnot")}
+
+#plot(fitnesses~y_error)
+```
+
+
+```{r estimating parameters from Daan data}
+#external mortality (Fig. 15, see excel attached)
+x<-as.data.frame(matrix(data=c(25,50,75,100, 0.8, 0.94, 0.86, 0.77), nrow=4, ncol=2))
+colnames(x)<-c("days", "fitness")
+x_approx <- rep(x$days, as.integer(x$fitness*100))
+mean(x_approx)
+sd(x_approx)
+```
+
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
