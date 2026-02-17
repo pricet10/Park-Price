@@ -117,7 +117,7 @@ z
 
 ```{r max in wbar according to perplexity equation}
 
-#note 
+#note if we have too much error, we can get negative fitnesses, but optimum is always positive
 
 y_opt <- function(omegasq, af, n, c) (-af * n + sqrt((af * n)^2 + 4 * c^2 * omegasq)) / (2 * c)
 
@@ -159,27 +159,34 @@ af=1
 sigma_n=0.5
 omegasq=20
 c=1
-vg=0.5
-ve=0.5
+vg=0.2
+ve=0.2
 vge=vg+ve
 
-nbar<-seq(2,3,1)
- sigma_n<-c(0.5,1) 
-results<-list()
+nbar<-seq(0, 2,1)
+sigma_n<-seq(0.5, 1.5, 0.5) 
+omegasq<-c(5,10,20,25)
+c<-c(0.1, 0.5,1,2)
+
+
+
+results <- data.frame(matrix(NA, nrow = 2, ncol = 10))
+
+names(results)<-c("ybar", "yvar", "seldiff", "stdeldiff", "heritability", "sigma_n", "Mean_n", "omegasq","c", "errorORnot")
 
 for(k in 1: length(nbar)) {
-n<-rnorm(1000, nbar[k], sd = sigma_n[1])
-#run with no error in switch point.
-noerror<-stats(n, omegasq=omegasq, af=af, c=c)
+  for(l in 1: length(sigma_n)) {
+    for(m in 1:length(omegasq)) {
+      for(j in 1: length(c)) {
 
-#adding error to y
-error<-errorf(n, omegasq=omegasq, af=af, c=c)
-
-results[[k]]<-rbind(noerror, error)
-
-results[[k]]<-cbind(results[[k]], sigma_n[1], nbar, omegasq, c, c("noerror", paste("error=",vge, sep="")))
-names(results[[k]])[c(6:10)]<-c("sigma_n", "Mean_n", "omegasq","c", "errorORnot")}
-
+n<-rnorm(1000, nbar[k], sd = sigma_n[l])
+noerror<-stats(n, omegasq=omegasq[m], af=af, c=c[j])
+error<-errorf(n, omegasq=omegasq[m], af=af, c=c[j])
+res<-rbind(noerror, error)
+res<-cbind(res, sigma_n[l], nbar[k], omegasq[m], c[j], c("noerror", paste("error=",vge, sep="")))
+names(res)<-c("ybar", "yvar", "seldiff", "stdeldiff", "heritability", "sigma_n", "Mean_n", "omegasq","c", "errorORnot")
+results<-rbind(results, res)}}}}
+results<-results[-c(1,2),]
 #plot(fitnesses~y_error)
 ```
 
