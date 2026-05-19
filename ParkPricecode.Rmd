@@ -1,0 +1,353 @@
+---
+title: "ParkPrice"
+author: "Trevor"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+library(geomtextpath)
+
+prettyplot<-function(p1, xlab, ylab) {p2<-p1+theme(axis.title = element_text(size = 16)) + ylab(ylab)+ xlab(xlab)
+p3<-p2+theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_rect(fill="white"), axis.line = element_line(colour = "black", linewidth=1), legend.position="none", axis.text=element_text(size=10))}
+#prelim to make a nicer plot
+
+
+#Figure 1 right Drent and Daan model the linear function is F=n+cy. gaussian function is  normal. max is given from differentiation *Fig 5 in text)
+
+
+computeMax<-function(n,c, omega) (sqrt(4*c*c*omega*omega+n*n)-n)/(2*c) #max fitness of an individual in initial state, n. 
+
+fitness_for_any_y <- function(y, af, n, c, omegasq) {
+  (1 / sqrt(2 * pi * omegasq)) * exp(-y^2 / (2 * omegasq)) * (af * n + c * y)}
+
+
+library(ggforce)
+library(ggplot2)
+library(reshape2)
+avec<-seq(-0.05, 0.2, 0.005)
+maxy<-as.data.frame(matrix(ncol=1, nrow=length(avec)))
+
+#for (i in 1:10) maxy[,i+1]<-computeMax(avec, 0.07, (1+i)/10)
+
+maxy<-computeMax(avec, 0.07, 1)
+
+opt<-data.frame(avec, maxy)
+optmelt<-reshape2::melt(opt[,c(1,2)], id.var='avec')
+p1<-ggplot(optmelt, aes(x=avec, y=value, group=variable, color = avec)) + ggforce::geom_link2(lwd=2) + 
+    scale_color_gradient(low = "blue", high = "red")+ylim(c(0,1.5)) 
+p2<- p1+ theme(axis.line = element_line(linewidth = 0.3), axis.ticks = element_line(linewidth = 0.8), axis.ticks.length = unit(7, "pt")) +scale_x_continuous(breaks = seq(-0.05, 0.15, 0.1))
+p3<-prettyplot(p2, "Nutritional state", "Displacement")
+
+
+#fig 1 left
+omegasq<-1
+af=1
+n<-c(-0.02, 0.09)
+c<-0.07
+y<-seq(-2,3,0.01)
+y1<-n[1]+c*y
+y2<-n[2]+c*y
+envcurve<-(1 / sqrt(2 * pi * omegasq)) * exp(-y^2 / (2 * omegasq))
+plot(envcurve~y, type="l", col="purple",  las=1, bty="l", ylab="Relative fitness", xlab="Breeding date", lwd=3)
+axis(1, lwd = 2)              # thicker bottom axis line
+axis(2, lwd = 2)
+F_nlow<-fitness_for_any_y(y, af, n[1], c, omegasq)
+lines(F_nlow*8~y, xlim=c(-c/n[1], 3), col="blue", lwd=3)
+F_nhigh<-fitness_for_any_y(y, af, n[2], c, omegasq)
+lines(F_nhigh*8~y, xlim=c(-c/n[2], 3), col="red", lwd=3)
+lines(y1~y, col="#0000FF66", lty=2, lwd=3)
+lines(y2~y, col="#FF000088", lty=2, lwd=3)
+
+
+#fitness
+library(rgl)
+n <- seq(0, 4, 0.1)
+y <- seq(0, 2, 0.1)
+f <- function(n,y) exp(-y^2)*(n+y)
+z <- outer(n, y, f)*10
+
+contour(n,y, z, nlevels = 10, xlab = "nutrition", ylab = "breeding date")
+
+open3d()
+persp3d(n, y, z,
+      theta = 40, phi = 30,
+      xlab = "nutritional state", ylab = "breeding date", zlab = "fitness",
+      col = "lightblue", shade = 0.5, border = NA, box=F)
+
+
+plot(exp(-y^2)*(2+y)~ y, type="l", las=1, bty="l", col="red", ylab="Fitness", xlab="Breeding date", yaxt="n", xaxt="n")
+at <- pretty(range(y))                 # tick positions
+lab <- sprintf("%.0f", at)            # format with 2 decimals
+axis(1, at = at, labels = lab) 
+at2 <- pretty(range(n))
+lab <- sprintf("%.0f", at2)    
+axis(2, at2, labels = lab) 
+lines(exp(-y^2)*(1+y)~ y, col="purple")
+lines(exp(-y^2)*(y)~ y,col="blue")
+
+
+                                                                                          
+```
+
+```{r Jose mean}
+library(GPBayes)
+
+xh<-function(sigma_y,omega,sigma_n, c, a) {
+  xi<-(sqrt(2)*c*omega^2*(sigma_y^2 + omega^2)) / ( abs(a)*sigma_n )
+  y<-HypergU(-0.5, 0, xi^2)/xi
+  g<-data.frame(xi,y)
+  return(g)}
+  
+
+sigma_y=1
+omega=2
+c=1
+a=1
+sigma_n<-seq(0,1,0.01)
+
+
+z<-sapply(sigma_n, xh, sigma_y=sigma_y, omega=omega, c=c, a=a)
+colnames(z)<-paste("sigman=",as.character(sigma_n), sep="")
+z
+
+#xh(sigma_y,omega,sigma_n, c, a)
+```
+
+
+
+```{r max in wbar according to perplexity equation}
+
+#note if we have too much error, we can get negative fitnesses, but optimum is always positive
+#there is print function to indicate when get neg fitnesses. Best avoided with large omegasq
+
+y_opt <- function(omegasq, af, n, c) (-af * n + sqrt((af * n)^2 + 4 * c^2 * omegasq)) / (2 * c)
+
+fitness_for_any_y <- function(y, af, n, c, omegasq) {
+  (1 / sqrt(2 * pi * omegasq)) * exp(-y^2 / (2 * omegasq)) * (af * n + c * y)}
+
+
+#add error to an individual n and compute the fitness.summary is if we want mean stats of list of y and fitness
+errorf<-function(n, omegasq, af,  c, summary) {
+accumulator<-list()
+for (j in 1:length(n)){
+y<-rnorm(100, y_opt(n=n[j], omegasq=omegasq, af=af, c=c), sqrt(vge))
+fitnesses<-fitness_for_any_y(y, af, n=n[j], c, omegasq)
+if(sum(fitnesses<0)>0) print(sum(fitnesses<0)) #ensure in region with no negative fitnesses
+accumulator[[j]]<-data.frame(y,fitnesses)}
+res <- do.call(rbind, accumulator)
+res <- as.data.frame(res)
+seldiff<-cov(res$y,res$fitnesses)/mean(res$fitnesses)
+stddseldiff<-seldiff/sqrt(var(res$y))
+yvar<-var(res$y)
+ybar<-mean(res$y) 
+heritability<-vg/yvar
+Ymaxfit<-res$y[which(res$fitnesses==max(res$fitnesses))][1]
+Ymeanfit<-res$y[which(abs(res$fitnesses-mean(res$fitnesses))==min(abs(res$fitnesses-mean(res$fitnesses))))]
+
+if(summary==1) return(data.frame(ybar, yvar, seldiff, stddseldiff, heritability, Ymaxfit,Ymeanfit)) 
+
+if(summary==2) return(res)#this was to compute fitness plot and meanfitness
+}
+
+
+
+omegasq=27*27 #kestrel
+c=0.094 #kestrel
+af=1
+sigma_n=0.44 #kestrel
+nbar=2.6 #kestrel
+vg=0.2
+ve=0.2
+vge=vg+ve
+#omegasq=10
+#nbar<-seq(1.6, 3.6,1)
+#sigma_n<-seq(0.3, 0.55, 0.05) 
+#omegasq<-c(200,500)
+#c<-seq(0.1,1.1,0.5)
+
+
+
+results <- data.frame(matrix(NA, nrow = 2, ncol = 12))
+
+names(results)<-c("ybar", "yvar", "seldiff", "stdeldiff", "heritability", "maxfit", "maxmeanfit", "sigma_n", "Mean_n", "omegasq","c", "errorORnot")
+
+for(k in 1: length(nbar)) {
+  for(l in 1: length(sigma_n)) {
+    for(m in 1:length(omegasq)) {
+      for(j in 1: length(c)) {
+
+n<-rnorm(1000, nbar[k], sd = sigma_n[l])
+res<-errorf(n, omegasq=omegasq[m], af=af, c=c[j], 1)
+res<-cbind(res, sigma_n[l], nbar[k], omegasq[m], c[j], c(paste("error=",vge, sep="")))
+names(res)<-c("ybar", "yvar", "seldiff", "stdeldiff", "heritability", "maxfit", "maxmeanfit", "sigma_n", "Mean_n", "omegasq","c", "errorORnot")
+results<-rbind(results, res)}}}}
+
+results<-results[-c(1,2),]
+
+plot(abs(results$stdeldiff)~results$sigma_n, type="l", ylab="Standardized selection differential", xlab="sigman", ylim=c(0,0.15), las=2, col="red", bty="l")
+
+plot(abs(results$stdeldiff)~results$Mean_n, type="l", ylab="Standardized selection differential", xlab="Mean_n", ylim=c(0,0.15), las=2, col="red", bty="l")
+
+library(metR)
+library(ggpubr)
+library(scales)
+
+x <- results$Mean_n
+y <- results$sigma_n
+z <- results$stdeldiff
+#z<-results$heritability
+#z<-results$ybar
+#z<-results$yvar-vge
+
+greys <- colorRampPalette(c("grey90", "black"))(6)
+brks <- pretty(range(data.frame(x,y,z)$z), n = 10)
+
+p<-ggplot(data.frame(x,y,z), aes(x = x, y = y, z = z)) +  geom_contour_filled(breaks = brks) +xlab("Mean")+ylab("Standard deviation") 
+
+#plasticity variance
+#pplat<-p+  geom_textcontour(breaks = brks[seq(1,14,2)], aes(label = ..level.., colour = factor(..level..)), text_only = TRUE, size = 6, vjust=1.03) +scale_colour_manual(values = c("grey","grey","black","black","black","black")) +theme(legend.position = "none")  + ggtitle("(D) Plasticity variance") +geom_point(x=2.6, y=0.44, color = "brown", size = 2)
+
+#selection differential
+#psd<-p+  geom_textcontour(breaks = brks[seq(1,14,2)], aes(label = ..level.., colour = factor(..level..)), text_only = TRUE, size = 6, vjust = 0.75) +scale_colour_manual(values = c("grey","grey","black","black","black","black")) +theme(legend.position = "none")+  ggtitle("(A) Selection differential") +geom_point(x=2.6, y=0.44, color = "brown", size = 2)
+
+#heritability:
+#ph2<-p+geom_textcontour(breaks = brks[seq(1,14,2)], aes(label = ..level.., colour = factor(..level..)), text_only = TRUE, size = 6, hjust=0.45) +scale_colour_manual(values = c("grey","grey","black","black","black","black")) +theme(legend.position = "none")+  ggtitle("(B) Heritability") +geom_point(x=2.6, y=0.44, color = "brown", size = 2)
+
+#ybar:
+#pybar<-p+metR::geom_text_contour(breaks = brks[seq(1,14,2)],aes(label = ..level.., colour = factor(..level..)), rotate = FALSE,size = 6,nudge_y = 0.01) +scale_colour_manual(values = c("white","white","black","black","black","black")) +theme(legend.position = "none") + ggtitle("(C) Displacement") +geom_point(x=2.6, y=0.44, color = "brown", size = 2)
+
+
+omegasq=10
+c=1 
+af=1
+sigma_n=1
+nbar=1
+vge=0.4
+#this is to plot fitnesses) if we are to keep use it
+n<-rnorm(1000, nbar, sd = sigma_n)
+forfit<-errorf(n=n, omegasq=omegasq, af=1, c=c, summary=2)
+forfit$corrysq<-forfit$y*forfit$y
+fit<-lm(forfit$fitnesses~forfit$y+forfit$corrysq)
+fit<-data.frame(fit$fitted.values/max(fit$fitted.values),forfit$y)
+fit<-fit[order(forfit$y),]
+names(fit)<-c("fitness", "date")
+plot(fit$fitness/max(fit$fitness)~fit$date, type="l", ylab="fitness", xlab="date", xlim=c(-5,35), ylim=c(0,1.3))
+
+d<-seq(-5,5,0.1)
+normal<- exp(-d^2 / (2 * omegasq))
+envcurve<-data.frame(normal/max(normal),d)
+names(envcurve)<-c("fitness", "date")
+
+#,+ geom_point(data   = fit, aes(x=date, y=fitness))
+#p1<- ggplot() + geom_smooth(data   = fit, aes(x=date, y=fitness, colour = "fit"), method = "lm", formula = y ~ x + I(x^2), se = FALSE) + geom_smooth(data = envcurve, aes(date, fitness, colour = "envcurve"), se=F) + scale_colour_manual(values = c("fit" = "blue", "envcurve" = "purple")) 
+
+p1<- ggplot() + geom_smooth(data   = fit, aes(x=date, y=fitness, colour = "fit"), method = "lm", formula = y ~ x + I(x^2), se = FALSE) + geom_path(data = envcurve, aes(date, fitness, colour = "envcurve"), linewidth=1) + scale_colour_manual(values = c("fit" = "blue", "envcurve" = "purple")) +
+  coord_cartesian(xlim = c(min(fit$date, envcurve$date), 5), ylim = c(0, 1))
+
+
+p2<- p1+coord_cartesian(ylim = c(0.25, 1))+geom_hline(yintercept = 0.25, colour = "black", linewidth = 0.6)
+
+#
+#p3<- p1+ geom_histogram(data = fit, aes(x = date, fill = "fit"), y = 0.75+after_stat(count / (10*sum(count))), bins = 50, alpha = 0.3, inherit.aes = FALSE)
+
+p3<- p1+geom_histogram(data = fit,aes(x = date,y = after_stat(scales::rescale(count, to = c(0, 0.3))), fill = "fit"), bins = 50,alpha = 0.3,inherit.aes = FALSE)
+
+
+p4<-p3+theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_rect(fill="white"), axis.line = element_line(colour = "black", linewidth=1), legend.position="none", axis.text=element_text(size=10))
+
+title <- paste("Omegasq=",omegasq,"nbar=",nbar,"sigman=",sigma_n,"c=",c,"vge=",vge)
+
+p5<-p4+labs(title = title) + theme( axis.title = element_text(size = 14),axis.text  = element_text(size = 12))
+
+ggsave("fitnessFigureSD.pdf", plot = p4, width = 20, height = 8, units = "cm")
+
+
+#plot(fitnesses~y_error)
+```
+
+
+```{r estimating parameters from Daan data}
+#external mortality (Fig. 15, see excel attached)
+x<-as.data.frame(matrix(data=c(25,50,75,100, 0.8, 0.94, 0.86, 0.77), nrow=4, ncol=2))
+colnames(x)<-c("days", "fitness")
+x_approx <- rep(x$days, as.integer(x$fitness*100))
+mean(x_approx)
+sd(x_approx)
+```
+
+```{r Visser data Plos Biol}
+visser<-read.csv("~/Desktop/current does/currentpapersgrants/Park&Price/data/visserDataPlosBiol.csv")
+mean(tapply(visser$laydate, visser$year, function(x) sqrt(var(x, na.rm=T))))
+```
+
+
+```{r}
+data<-load("~/Desktop/current does/currentpapersgrants/Park&Price/pdfs/radchuk/dat_Sel.rda")
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r tryin gaussian mixture}
+#function written by perplexity
+# Given parameters:
+# theta1, theta2 : means of G1 and G2
+# omega1, omega2 : standard deviations (widths) of G1 and G2
+# k              : additive constant
+
+mix_mean_var <- function(theta1, theta2, omega1, omega2, k) {
+  # Product Gaussian parameters
+  omega12_sq <- (omega1^2 * omega2^2) / (omega1^2 + omega2^2)
+  omega12    <- sqrt(omega12_sq)
+  theta12    <- (theta1 * omega2^2 + theta2 * omega1^2) / (omega1^2 + omega2^2)
+  
+  # Amplitude factor from product G1 * G2
+  C <- exp(-(theta1 - theta2)^2 / (2 * (omega1^2 + omega2^2))) *
+       sqrt(1 / (omega1^2 + omega2^2))
+  
+  # Integrals (unnormalized weights)
+  A1 <- k * sqrt(2 * pi) * omega1
+  A2 <- C * sqrt(2 * pi) * omega12
+  
+  # Mixture weights
+  w1 <- A1 / (A1 + A2)
+  w2 <- A2 / (A1 + A2)
+  
+  # Mean of the normalized mixture
+  mu <- w1 * theta1 + w2 * theta12
+  
+  # Variance of the normalized mixture
+  var <- w1 * (omega1^2 + (theta1   - mu)^2) +
+         w2 * (omega12^2 + (theta12 - mu)^2)
+  
+  list(mean = mu, var = var, sd = sqrt(var),
+       w1 = w1, w2 = w2,
+       theta12 = theta12, omega12 = omega12)
+}
+
+theta1  <- 0
+theta2  <- 1
+omega1  <- 0.5
+omega2  <- 0.8
+k       <- 0.2
+
+res <- mix_mean_var(theta1, theta2, omega1, omega2, k)
+res$mean
+res$sd
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
