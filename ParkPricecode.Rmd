@@ -41,7 +41,7 @@ p1<-ggplot(optmelt, aes(x=avec, y=value, group=variable, color = avec)) + ggforc
     scale_color_gradient(low = "blue", high = "red")+ylim(c(0,1.5)) 
 p2<- p1+ theme(axis.line = element_line(linewidth = 0.3), axis.ticks = element_line(linewidth = 0.8), axis.ticks.length = unit(7, "pt")) +scale_x_continuous(breaks = seq(-0.05, 0.15, 0.1))
 p3<-prettyplot(p2, "Nutritional state", "Displacement")
-
+p3
 
 #fig 1 left
 omegasq<-1
@@ -95,7 +95,7 @@ lines(y2~y, col="#FF000088", lty=2, lwd=3)
 
 
 ```{r figure 3, adapt for figure 4}
-
+#this includes both a way to get individual outputs, e.g. for the kestrel, as well as make graphs. One will need to alter the parameters and summary in the function to work.
 #note if we have too much error, we can get negative fitnesses, but optimum is always positive
 #there is print function to indicate when get neg fitnesses. Best avoided with large omegasq
 
