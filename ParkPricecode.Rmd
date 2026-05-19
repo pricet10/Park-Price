@@ -6,15 +6,16 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-
 knitr::opts_chunk$set(echo = TRUE)
 library(geomtextpath)
 
+#prelim to make a nicer plot
 prettyplot<-function(p1, xlab, ylab) {p2<-p1+theme(axis.title = element_text(size = 16)) + ylab(ylab)+ xlab(xlab)
 p3<-p2+theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_rect(fill="white"), axis.line = element_line(colour = "black", linewidth=1), legend.position="none", axis.text=element_text(size=10))}
-#prelim to make a nicer plot
+```
 
 
+```{r Figure 1}
 #Figure 1 right Drent and Daan model the linear function is F=n+cy. gaussian function is  normal. max is given from differentiation *Fig 5 in text)
 
 
@@ -62,63 +63,38 @@ lines(y1~y, col="#0000FF66", lty=2, lwd=3)
 lines(y2~y, col="#FF000088", lty=2, lwd=3)
 
 
-#fitness
-library(rgl)
-n <- seq(0, 4, 0.1)
-y <- seq(0, 2, 0.1)
-f <- function(n,y) exp(-y^2)*(n+y)
-z <- outer(n, y, f)*10
+#below we create a 3D fitness plot which is not in paper and commented out here
+#library(rgl)
+#n <- seq(0, 4, 0.1)
+#y <- seq(0, 2, 0.1)
+#f <- function(n,y) exp(-y^2)*(n+y)
+#z <- outer(n, y, f)*10
 
-contour(n,y, z, nlevels = 10, xlab = "nutrition", ylab = "breeding date")
+#contour(n,y, z, nlevels = 10, xlab = "nutrition", ylab = "breeding date")
 
-open3d()
-persp3d(n, y, z,
-      theta = 40, phi = 30,
-      xlab = "nutritional state", ylab = "breeding date", zlab = "fitness",
-      col = "lightblue", shade = 0.5, border = NA, box=F)
+#open3d()
+#persp3d(n, y, z,theta = 40, phi = 30,xlab = "nutritional state", ylab = "breeding date", zlab = "fitness",col = "lightblue", shade = 0.5, border = NA, box=F)
 
 
-plot(exp(-y^2)*(2+y)~ y, type="l", las=1, bty="l", col="red", ylab="Fitness", xlab="Breeding date", yaxt="n", xaxt="n")
-at <- pretty(range(y))                 # tick positions
-lab <- sprintf("%.0f", at)            # format with 2 decimals
-axis(1, at = at, labels = lab) 
-at2 <- pretty(range(n))
-lab <- sprintf("%.0f", at2)    
-axis(2, at2, labels = lab) 
-lines(exp(-y^2)*(1+y)~ y, col="purple")
-lines(exp(-y^2)*(y)~ y,col="blue")
+#plot(exp(-y^2)*(2+y)~ y, type="l", las=1, bty="l", col="red", ylab="Fitness", xlab="Breeding date", yaxt="n", xaxt="n")
+#at <- pretty(range(y))                 # tick positions
+#lab <- sprintf("%.0f", at)            # format with 2 decimals
+#axis(1, at = at, labels = lab) 
+#at2 <- pretty(range(n))
+#lab <- sprintf("%.0f", at2)    
+#axis(2, at2, labels = lab) 
+#lines(exp(-y^2)*(1+y)~ y, col="purple")
+#lines(exp(-y^2)*(y)~ y,col="blue")
 
 
                                                                                           
 ```
 
-```{r Jose mean}
-library(GPBayes)
-
-xh<-function(sigma_y,omega,sigma_n, c, a) {
-  xi<-(sqrt(2)*c*omega^2*(sigma_y^2 + omega^2)) / ( abs(a)*sigma_n )
-  y<-HypergU(-0.5, 0, xi^2)/xi
-  g<-data.frame(xi,y)
-  return(g)}
-  
-
-sigma_y=1
-omega=2
-c=1
-a=1
-sigma_n<-seq(0,1,0.01)
-
-
-z<-sapply(sigma_n, xh, sigma_y=sigma_y, omega=omega, c=c, a=a)
-colnames(z)<-paste("sigman=",as.character(sigma_n), sep="")
-z
-
-#xh(sigma_y,omega,sigma_n, c, a)
-```
 
 
 
-```{r max in wbar according to perplexity equation}
+
+```{r figure 3, adapt for figure 4}
 
 #note if we have too much error, we can get negative fitnesses, but optimum is always positive
 #there is print function to indicate when get neg fitnesses. Best avoided with large omegasq
@@ -279,13 +255,13 @@ sd(x_approx)
 ```
 
 ```{r Visser data Plos Biol}
-visser<-read.csv("~/Desktop/current does/currentpapersgrants/Park&Price/data/visserDataPlosBiol.csv")
+visser<-read.csv("~/Desktop/current does/currentpapersgrants/Park&Price/data/visserDataPlosBiol.csv") #readers to download
 mean(tapply(visser$laydate, visser$year, function(x) sqrt(var(x, na.rm=T))))
 ```
 
 
 ```{r}
-data<-load("~/Desktop/current does/currentpapersgrants/Park&Price/pdfs/radchuk/dat_Sel.rda")
+data<-load("~/Desktop/current does/currentpapersgrants/Park&Price/pdfs/radchuk/dat_Sel.rda")# readers to download
 ```
 
 ## R Markdown
